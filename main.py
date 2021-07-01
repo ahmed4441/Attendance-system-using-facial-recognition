@@ -166,25 +166,6 @@ def attendancedb(name, nameid, frame):
         sql_insert(con, entities)
 
 
-def Attendance(name, nameid):
-    with open('Attendance_Register.csv', 'r+') as f:
-        DataList = f.readlines()
-        nameids = []
-        for data in DataList:
-            ent = data.split(',')
-            try:
-                nameids.append(ent[1])
-            except:
-                pass
-        if nameid not in nameids:
-            thread1 = myThread(1, name, 1)
-            thread1.start()
-            curr = datetime.now()
-            dt = curr.strftime('%H:%M:%S')
-            dy = curr.strftime('%d-%m-%Y')
-            f.writelines(f'\n{name},{nameid},{dt},{dy}')
-
-
 encodeKnown = DbEncodings(images)
 print('Encoding Complete')
 
