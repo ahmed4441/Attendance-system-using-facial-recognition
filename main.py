@@ -7,10 +7,15 @@ from datetime import datetime
 import pyttsx3
 import time
 import threading
-import calendar
+#import calendar
 import sqlite3
 from sqlite3 import Error
 import base64
+import winsound
+import statistics
+duration = 1000  # milliseconds
+freq = 440  # Hz
+
 
 def frame_to_base64(frame):
     return base64.b64encode(frame)
@@ -25,6 +30,7 @@ engine = pyttsx3.init()
 voices = engine.getProperty('voices')
 engine.setProperty('voice', voices[1].id)
 lock = threading.Lock()
+lock2 = threading.Lock()
 
 
 def welcome_guest(name):
@@ -88,17 +94,23 @@ class myThread(threading.Thread):
         welcome_guest(self.name)
         lock.release()
         # print ("Exiting " + self.name)
+def alarm(freq,duration):
+    winsound.Beep(freq, duration)
 
 
-def print_time(threadName, counter, delay):
-    while counter:
-        # if exitFlag:
-        # threadName.exit()
-        time.sleep(delay)
-        print("%s: %s" % (threadName, time.ctime(time.time())))
-        counter -= 1
+class myThread2(threading.Thread):
+    def __init__(self, threadID, freq,duration):
+        threading.Thread.__init__(self)
+        self.threadID = threadID
+        self.freq = freq
+        self.duration = duration
 
-# Create new threads
+    def run(self):
+        lock2.acquire()
+        alarm(self.freq,self.duration)
+        lock2.release()
+
+
 
 # Get a reference to webcam #0 (the default one)
 video_capture = cv2.VideoCapture(0)
@@ -168,7 +180,8 @@ def attendancedb(name, nameid, frame):
 
 encodeKnown = DbEncodings(images)
 print('Encoding Complete')
-
+checkbeep = []
+countbeep = 0
 while True:
     # Grab a single frame of video
     ret, frame = video_capture.read()
@@ -182,19 +195,22 @@ while True:
 
     # Find all the faces and face encodings in the current frame of video
     face_locations = face_recognition.face_locations(rgb_small_frame)
-    face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations, num_jitters=44)
+    face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations, num_jitters=0)
 
     for encodeFace in face_encodings:
-        matchList = face_recognition.compare_faces(encodeKnown, encodeFace, tolerance=0.499)
-        #print(matchList)
-        if (np.argmax(matchList)):
-            name = known_face_names[np.argmax(matchList)]
-            nameid = known_face_ids[np.argmax(matchList)]
-            attendancedb(name, nameid, rgb_small_frame)
+        matchList = face_recognition.compare_faces(encodeKnown, encodeFace, tolerance=0.6)
+        faceDis = face_recognition.face_distance(encodeKnown, encodeFace)
+        #print(faceDis)
+        matchIndex = np.argmin(faceDis)
+
+        if matchList[matchIndex]:
+            name = known_face_names[matchIndex]
+            nameid = known_face_ids[matchIndex]
+            attendancedb(name, nameid, frame)
         # print(matchList)
         # Display the results
         for (top, right, bottom, left) in face_locations:
-            # print(f"Face found at: {face_locations}")
+            #print(f"Face found at: {face_locations}")
             # Scale back up face locations since the frame we detected in was scaled to 1/4 size
             top *= 4
             right *= 4
@@ -202,6 +218,14 @@ while True:
             left *= 4
             if not name:
                 name = "unknown"
+                #print("beep")
+                checkbeep.append(1)
+                #print(checkbeep)
+                countbeep+=1
+            else:
+                checkbeep.append(0)
+                countbeep = 0
+                checkbeep = []
             # Draw a box around the face
             cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
 
@@ -221,6 +245,16 @@ while True:
     # cv2.putText(frame, day, (470, 60), font, .6, (255, 0, 0), 2)
     # Display the resulting image
     cv2.imshow('live feed', frame)
+
+
+    if countbeep > 6:
+        doo = statistics.mode(checkbeep)
+        #print(doo)
+        #print (checkbeep)
+        if doo==1:
+            thread2 = myThread2(2, freq, duration)
+            thread2.start()
+            countbeep = 0
 
     # Hit 'q' on the keyboard to quit!
     if cv2.waitKey(1) & 0xFF == ord('q'):
